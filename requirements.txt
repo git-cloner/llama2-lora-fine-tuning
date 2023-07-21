@@ -1,0 +1,13 @@
+bitsandbytes==0.39.0
+accelerate
+deepspeed
+scipy
+sentencepiece
+datasets
+evaluate
+pytest
+scikit-learn
+torch
+torchvision
+tensorboard
+
