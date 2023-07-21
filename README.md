@@ -1,6 +1,6 @@
 # 用Lora和deepspeed微调LLaMA2
 
-参照https://github.com/FlagAlpha/Llama2-Chinese源码，在两块P100（16G）上微调Llama-2-7b-chat模型。
+参照 https://github.com/FlagAlpha/Llama2-Chinese 源码，在两块P100（16G）上微调Llama-2-7b-chat模型。
 
 ## 1、显卡要求
 
@@ -34,11 +34,6 @@ python -m bitsandbytes
 ## 4、下载模型
 
 ```bash
-# 安装model下载器依赖
-pip install "modelscope==1.7.2rc0" -f https://modelscope.oss-cn-beijing.aliyuncs.com/releases/repo.html  -i https://pypi.mirrors.ustc.edu.cn/simple
-# 下载Llama-2-7b-chat模型
-python download_model.py
-
 python model_download.py --repo_id daryl149/llama-2-7b-chat-hf
 ```
 
