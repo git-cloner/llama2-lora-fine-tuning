@@ -1,6 +1,8 @@
-# 用Lora和deepspeed微调LLaMA2
+# 用Lora和deepspeed微调LLaMA2-Chat
 
-参照 https://github.com/FlagAlpha/Llama2-Chinese 源码，在两块P100（16G）上微调Llama-2-7b-chat模型。
+在两块P100（16G）上微调Llama-2-7b-chat模型。
+
+数据源采用了alpaca格式，由train和validation两个数据源组成。
 
 ## 1、显卡要求
 
@@ -17,7 +19,7 @@ cd llama2-lora-fine-tuning
 
 ```bash
 # 创建虚拟环境
-conda create -n llama2 python=3.9
+conda create -n llama2 python=3.9 -y
 conda activate llama2
 # 下载github.com上的依赖资源（需要反复试才能成功，所以单独安装）
 export GIT_TRACE=1
@@ -31,7 +33,7 @@ pip install -r requirements.txt -i https://pypi.mirrors.ustc.edu.cn/simple
 python -m bitsandbytes
 ```
 
-## 4、下载模型
+## 4、下载原始模型
 
 ```bash
 python model_download.py --repo_id daryl149/llama-2-7b-chat-hf
@@ -43,7 +45,7 @@ python model_download.py --repo_id daryl149/llama-2-7b-chat-hf
 
 | 参数                        | 说明                       | 取值                                                         |
 | --------------------------- | -------------------------- | ------------------------------------------------------------ |
-| load_in_bits                | 模型精度                   | 4和8，如果显存不溢出，尽量选高精度                           |
+| load_in_bits                | 模型精度                   | 4和8，如果显存不溢出，尽量选高精度8                          |
 | block_size                  | token最大长度              | 首选2048，内存溢出，可选1024、512等                          |
 | per_device_train_batch_size | 训练时每块卡每次装入批量数 | 只要内存不溢出，尽量往大选                                   |
 | per_device_eval_batch_size  | 评估时每块卡每次装入批量数 | 只要内存不溢出，尽量往大选                                   |
@@ -53,10 +55,13 @@ python model_download.py --repo_id daryl149/llama-2-7b-chat-hf
 ## 6、微调
 
 ```bash
-# 授权（只执行一次）
 chmod +x finetune-lora.sh
 # 微调
 ./finetune-lora.sh
+# 微调（后台运行）
+pkill -9 -f finetune-lora
+nohup ./finetune-lora.sh > train.log  2>&1 &
+tail -f train.log
 ```
 
 ## 7、测试

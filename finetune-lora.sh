@@ -2,15 +2,15 @@ output_model=output
 if [ ! -d ${output_model} ];then  
     mkdir ${output_model}
 fi
-deepspeed --include localhost:1,2 --master_port 29506 finetune-lora.py \
+deepspeed --include localhost:1,2 --master_port 29000 finetune-lora.py \
     --model_name_or_path ./models/daryl149/llama-2-7b-chat-hf \
-    --train_files ./data/train_sft.csv \
-    --validation_files  ./data/dev_sft.csv \
-    --per_device_train_batch_size 2 \
-    --per_device_eval_batch_size 2 \
+    --train_files ./data/alpaca_gpt4_data_zh.json \
+    --validation_files  ./data/trans_chinese_alpaca_data.json \
+    --per_device_train_batch_size 4 \
+    --per_device_eval_batch_size 4 \
     --do_train \
     --do_eval \
-    --use_fast_tokenizer false \
+    --use_fast_tokenizer true \
     --output_dir ${output_model} \
     --evaluation_strategy  steps \
     --max_eval_samples 800 \
@@ -38,5 +38,4 @@ deepspeed --include localhost:1,2 --master_port 29506 finetune-lora.py \
     --overwrite_output_dir \
     --ignore_data_skip true \
     --gradient_checkpointing \
-    --ddp_timeout 18000000 \
-    | tee -a ${output_model}/train.log  
+    --ddp_timeout 18000000

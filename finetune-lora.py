@@ -44,6 +44,7 @@ from transformers import (
 )
 from transformers.testing_utils import CaptureLogger
 from transformers.trainer_utils import get_last_checkpoint
+from utils.prompter import Prompter
 from transformers.utils import check_min_version, send_example_telemetry
 from transformers.utils.versions import require_version
 
@@ -268,7 +269,7 @@ def smart_tokenizer_and_embedding_resize(
         output_embeddings[-num_new_tokens:] = output_embeddings_avg
 
 
-def _load_dataset(data_args,training_args,model_args):
+def _load_dataset(data_args, training_args, model_args):
     data_files = {}
     dataset_args = {}
     if data_args.train_files is not None:
@@ -280,9 +281,6 @@ def _load_dataset(data_args,training_args,model_args):
         if data_args.train_files is not None
         else data_args.validation_files.split(".")[-1]
     )
-    if extension == "txt":
-        extension = "text"
-        dataset_args["keep_linebreaks"] = data_args.keep_linebreaks
     raw_datasets = load_dataset(
         extension,
         data_files=data_files,
@@ -340,7 +338,7 @@ def train():
         + f"distributed training: {bool(training_args.local_rank != -1)}, 16-bits training: {training_args.fp16}"
     )
     logger.info(f"Training/evaluation parameters {training_args}")
-    logger.info("**********判断是否存在检查点")
+    logger.info("**********判断是否存在检查点**********")
     last_checkpoint = None
     if os.path.isdir(training_args.output_dir) and training_args.do_train and not training_args.overwrite_output_dir:
         last_checkpoint = get_last_checkpoint(training_args.output_dir)
@@ -354,13 +352,13 @@ def train():
                 f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
                 "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
             )
-    logger.info("**********set seed")
+    logger.info("**********set seed**********")
     set_seed(training_args.seed)
 
-    logger.info("**********装载数据集")
-    raw_datasets = _load_dataset(data_args,training_args,model_args)
+    logger.info("**********装载数据集**********")
+    raw_datasets = _load_dataset(data_args, training_args, model_args)
 
-    logger.info("**********从模型装载config")
+    logger.info("**********从模型装载config**********")
     config_kwargs = {
         "cache_dir": model_args.cache_dir,
         "revision": model_args.model_revision,
@@ -381,7 +379,7 @@ def train():
             config.update_from_string(model_args.config_overrides)
             logger.info(f"New config: {config}")
 
-    logger.info("**********装载tokenizer")
+    logger.info("**********装载tokenizer**********")
     tokenizer_kwargs = {
         "cache_dir": model_args.cache_dir,
         "use_fast": model_args.use_fast_tokenizer,
@@ -401,12 +399,10 @@ def train():
             "You can do it from another script, save it, and load it from here, using --tokenizer_name."
         )
 
-    logger.info("**********使用Lora方式装载模型")
+    logger.info("**********使用Lora方式装载模型**********")
     lora_config = LoraConfig(
         r=model_args.lora_r,
         lora_alpha=model_args.lora_alpha,
-        # target_modules=["query_key_value"],
-        # target_modules =  ['q_proj', 'k_proj', 'v_proj', 'o_proj'],
         target_modules=model_args.target_modules,
         fan_in_fan_out=False,
         lora_dropout=0.05,
@@ -438,7 +434,7 @@ def train():
             load_in_8bit=True if model_args.load_in_bits == 8 else False,
             quantization_config=bnb_config_4bit if model_args.load_in_bits == 4 else bnb_config_8bit,
             device_map={"": int(os.environ.get("LOCAL_RANK") or 0)}
-        )#.half().cuda()
+        )  # .half().cuda()
     else:
         model = AutoModelForCausalLM.from_config(config)
         n_params = sum({p.data_ptr(): p.numel()
@@ -446,7 +442,7 @@ def train():
         logger.info(
             f"Training new model from scratch - Total size={n_params/2**20:.2f}M params")
 
-    logger.info("**********调整嵌入的大小")
+    logger.info("**********调整嵌入的大小**********")
     # We resize the embeddings only when necessary to avoid index errors. If you are creating a model from scratch
     # on a small lora_configvocab and want a smaller embedding size, remove this test.
     embedding_size = model.get_input_embeddings().weight.shape[0]
@@ -457,75 +453,64 @@ def train():
     elif model_args.load_in_bits == 4:
         model = prepare_model_for_kbit_training(model)
 
-    logger.info("**********调整数据集")
-    # First we tokenize all the texts.
-    if training_args.do_train:
-        column_names = list(raw_datasets["train"].features)
-    else:
-        column_names = list(raw_datasets["validation"].features)
-
     train_on_inputs = True
-    if len(column_names) == 1:
-        text_column_name = "text" if "text" in column_names else column_names[0]
-    elif len(column_names) == 2:
-        input_column_name = 'input' if 'input' in column_names else column_names[0]
-        target_column_name = 'target' if 'target' in column_names else column_names[0]
-        train_on_inputs = False
-    else:
-        raise ValueError('column count error')
     print('train_on_inputs', train_on_inputs)
-    logger.info("**********生成和词元化prompt")
-    # since this will be pickled to avoid _LazyModule error in Hasher force logger loading before tokenize_function
-    tok_logger = transformers.utils.logging.get_logger(
-        "transformers.tokenization_utils_base")
+    logger.info("**********生成和词元化prompt**********")
+    tokenizer.pad_token_id = (
+        0  # unk. we want this to be different from the eos token
+    )
+    tokenizer.padding_side = "left"  # Allow batched inference
+    cutoff_len = 512
+    prompter = Prompter("alpaca")
 
-    def tokenize_function(examples):
-        with CaptureLogger(tok_logger) as cl:
-            output = tokenizer([item for item in examples[text_column_name]], truncation=True,
-                               max_length=data_args.block_size, padding=False, return_tensors=None)
-            output['labels'] = output['input_ids'].copy()
-        return output
+    def tokenize(prompt, add_eos_token=True):
+        result = tokenizer(
+            prompt,
+            truncation=True,
+            max_length=cutoff_len,
+            padding=False,
+            return_tensors=None,
+        )
+        if (
+            result["input_ids"][-1] != tokenizer.eos_token_id
+            and len(result["input_ids"]) < cutoff_len
+            and add_eos_token
+        ):
+            result["input_ids"].append(tokenizer.eos_token_id)
+            result["attention_mask"].append(1)
 
-    def tokenize(prompt):
-        result = tokenizer(prompt, truncation=True,
-                           max_length=data_args.block_size, padding=False, return_tensors=None)
         result["labels"] = result["input_ids"].copy()
+
         return result
 
     def generate_and_tokenize_prompt(data_point):
-        input_text = data_point[input_column_name]
-        target_text = data_point[target_column_name]
-        full_prompt = input_text+target_text
+        full_prompt = prompter.generate_prompt(
+            data_point["instruction"],
+            data_point["input"],
+            data_point["output"],
+        )
         tokenized_full_prompt = tokenize(full_prompt)
         if not train_on_inputs:
-            user_prompt = input_text
-            tokenized_user_prompt = tokenize(user_prompt)
+            user_prompt = prompter.generate_prompt(
+                data_point["instruction"], data_point["input"]
+            )
+            tokenized_user_prompt = tokenize(
+                user_prompt, add_eos_token=add_eos_token
+            )
             user_prompt_len = len(tokenized_user_prompt["input_ids"])
+
+            if add_eos_token:
+                user_prompt_len -= 1
+
             tokenized_full_prompt["labels"] = [
                 -100
             ] * user_prompt_len + tokenized_full_prompt["labels"][
                 user_prompt_len:
-            ]
+            ]  # could be sped up, probably
         return tokenized_full_prompt
 
-    with training_args.main_process_first(desc="dataset map tokenization"):
-        if not data_args.streaming:
-            tokenized_datasets = raw_datasets.map(
-                tokenize_function if train_on_inputs == True else generate_and_tokenize_prompt,
-                batched=True if train_on_inputs == True else False,
-                num_proc=data_args.preprocessing_num_workers,
-                remove_columns=column_names,
-                load_from_cache_file=not data_args.overwrite_cache,
-                desc="Running tokenizer on dataset",
-            )
-        else:
-            tokenized_datasets = raw_datasets.map(
-                tokenize_function if train_on_inputs == True else generate_and_tokenize_prompt,
-                batched=True if train_on_inputs == True else False,
-                remove_columns=column_names,
-            )
-
-    logger.info("**********校验数据集")
+    tokenized_datasets = raw_datasets.map(generate_and_tokenize_prompt)
+    logger.info("**********校验数据集**********")
     if data_args.block_size is None:
         block_size = tokenizer.model_max_length
         if block_size > 2048:
@@ -570,7 +555,7 @@ def train():
             preds = preds[:, :-1].reshape(-1)
             return metric.compute(predictions=preds, references=labels)
         # layer_norm_names=[]
-    logger.info("**********peft处理model")
+    logger.info("**********peft处理model**********")
     model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
     special_tokens_dict = dict()
@@ -587,7 +572,7 @@ def train():
         tokenizer=tokenizer,
         model=model,
     )
-    logger.info("**********初始化训练器")
+    logger.info("**********初始化训练器**********")
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -604,7 +589,7 @@ def train():
             model, PeftModel) else None),
     )
 
-    logger.info("**********开始训练")
+    logger.info("**********开始训练**********")
     if training_args.do_train:
         checkpoint = None
         if training_args.resume_from_checkpoint is not None:
@@ -646,10 +631,8 @@ def train():
         trainer.save_metrics("train", metrics)
         trainer.save_state()
 
-    logger.info("**********开始评估")
+    logger.info("**********开始评估**********")
     if training_args.do_eval:
-        logger.info("*** Evaluate ***")
-
         metrics = trainer.evaluate()
 
         max_eval_samples = data_args.max_eval_samples if data_args.max_eval_samples is not None else len(
