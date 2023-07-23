@@ -460,7 +460,10 @@ def train():
         0  # unk. we want this to be different from the eos token
     )
     tokenizer.padding_side = "left"  # Allow batched inference
-    cutoff_len = 512
+    if data_args.block_size is None:
+        cutoff_len = 512
+    else:
+        cutoff_len = data_args.block_size
     prompter = Prompter("alpaca")
 
     def tokenize(prompt, add_eos_token=True):

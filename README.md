@@ -66,6 +66,9 @@ tail -f train.log
 
 ## 7、测试
 
-目前作者的微调过程还未结束，所以还没办法验证（待续！），验证方法可参见：
-
-https://github.com/git-cloner/llama-lora-fine-tuning/blob/main/README_cn.md#4%E6%B5%8B%E8%AF%95%E6%A8%A1%E5%9E%8B
+```bash
+CUDA_VISIBLE_DEVICES=0 python generate.py \
+    --base_model './models/daryl149/llama-2-7b-chat-hf' \
+    --lora_weights 'output/checkpoint-1000' \
+    --load_8bit #不加这个参数是用的4bit
+```
