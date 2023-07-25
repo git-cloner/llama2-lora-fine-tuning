@@ -4,6 +4,7 @@ if [ ! -d ${output_model} ];then
 fi
 deepspeed --include localhost:1,2 --master_port 29000 finetune-lora.py \
     --model_name_or_path ./models/daryl149/llama-2-7b-chat-hf \
+    --tokenizer_name ./merged_tokenizer_hf \
     --train_files ./data/alpaca_gpt4_data_zh.json \
     --validation_files  ./data/trans_chinese_alpaca_data.json \
     --per_device_train_batch_size 4 \

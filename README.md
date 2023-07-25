@@ -39,7 +39,18 @@ python -m bitsandbytes
 python model_download.py --repo_id daryl149/llama-2-7b-chat-hf
 ```
 
-## 5、微调参数
+## 5、扩充中文词表
+
+```bash
+# 使用了https://github.com/ymcui/Chinese-LLaMA-Alpaca.git的方法扩充中文词表
+# 扩充完的词表在merged_tokenizes_sp（全精度）和merged_tokenizer_hf（半精度）
+# 在微调时，将使用--tokenizer_name ./merged_tokenizer_hf参数
+python merge_tokenizers.py \
+  --llama_tokenizer_dir ./models/daryl149/llama-2-7b-chat-hf \
+  --chinese_sp_model_file ./chinese_sp.model
+```
+
+## 6、微调参数说明
 
 有以下几个参数可以调整：
 
@@ -52,7 +63,7 @@ python model_download.py --repo_id daryl149/llama-2-7b-chat-hf
 | include                     | 使用的显卡序列             | 如两块：localhost:1,2（特别注意的是，序列与nvidia-smi看到的不一定一样） |
 | num_train_epochs            | 训练轮数                   | 至少3轮                                                      |
 
-## 6、微调
+## 7、微调
 
 ```bash
 chmod +x finetune-lora.sh
@@ -64,11 +75,13 @@ nohup ./finetune-lora.sh > train.log  2>&1 &
 tail -f train.log
 ```
 
-## 7、测试
+## 8、测试
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 python generate.py \
     --base_model './models/daryl149/llama-2-7b-chat-hf' \
-    --lora_weights 'output/checkpoint-1000' \
+    --lora_weights 'output/checkpoint-2800' \
     --load_8bit #不加这个参数是用的4bit
 ```
+
+
