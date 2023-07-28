@@ -80,8 +80,7 @@ tail -f train.log
 ```bash
 CUDA_VISIBLE_DEVICES=0 python generate.py \
     --base_model './models/daryl149/llama-2-7b-chat-hf' \
-    --lora_weights 'output/checkpoint-2800' \
+    --lora_weights 'output/checkpoint-2000' \
     --load_8bit #不加这个参数是用的4bit
 ```
-
 
